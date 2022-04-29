@@ -21,12 +21,12 @@ type event struct {
 	originID   uuid.UUID
 }
 
-func NewEvent(eName string, originTime time.Time, originID uuid.UUID, data string) (Event, error) {
+func NewEvent(eName string, originID uuid.UUID, data string) (Event, error) {
 	if eName == "" {
 		return nil, errors.New("eName is required for event")
 	}
 
-	return &event{name: eName, data: data, originTime: originTime, originID: originID}, nil
+	return &event{name: eName, data: data, originTime: time.Now(), originID: originID}, nil
 }
 
 func (this *event) Name() string {

@@ -63,11 +63,8 @@ func (this *eventServerConn) processEvent() {
 		var id uuid.UUID
 		id, err = uuid.Parse(jEvent.OriginUUID)
 		if err == nil {
-			var e Event
-			e, err = NewEvent(jEvent.EventName, jEvent.OriginTime, id, jEvent.Data)
-			if err == nil {
-				this.handlerFunc(e)
-			}
+			e := &event{name: jEvent.EventName, originTime: jEvent.OriginTime, originID: id, data: jEvent.Data}
+			this.handlerFunc(e)
 		}
 	}
 
