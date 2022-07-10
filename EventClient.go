@@ -1,16 +1,16 @@
 package eventsocket
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"log"
 	"net/url"
 
-	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 )
 
-func DialEventServer(u *url.URL, handleFunc func(Event)) (io.Closer, error) {
+func DialEventServer(u *url.URL, handleFunc func(io.Reader)) (io.Closer, error) {
 	if u == nil {
 		return nil, errors.New("u of URL is required to dial an event server")
 	}
@@ -33,10 +33,10 @@ func DialEventServer(u *url.URL, handleFunc func(Event)) (io.Closer, error) {
 type eventServerConn struct {
 	websocketConn *websocket.Conn
 	doneChan      chan bool
-	handlerFunc   func(Event)
+	handlerFunc   func(io.Reader)
 }
 
-func newEventServerConn(c *websocket.Conn, hFunc func(Event)) *eventServerConn {
+func newEventServerConn(c *websocket.Conn, hFunc func(io.Reader)) *eventServerConn {
 	eSConn := &eventServerConn{websocketConn: c}
 	eSConn.doneChan = make(chan bool)
 	eSConn.handlerFunc = hFunc
@@ -57,19 +57,15 @@ func (this *eventServerConn) processEventsLoop() {
 }
 
 func (this *eventServerConn) processEvent() {
-	jEvent := &jsonEvent{}
-	err := this.websocketConn.ReadJSON(jEvent)
-	if err == nil {
-		var id uuid.UUID
-		id, err = uuid.Parse(jEvent.OriginUUID)
-		if err == nil {
-			e := &event{name: jEvent.EventName, originTime: jEvent.OriginTime, originID: id, data: jEvent.Data}
-			this.handlerFunc(e)
-		}
-	}
+	mType, data, err := this.websocketConn.ReadMessage()
 
 	if err != nil {
 		log.Println(err)
+	} else {
+		if mType == websocket.BinaryMessage {
+			buffer := bytes.NewBuffer(data)
+			this.handlerFunc(buffer)
+		}
 	}
 }
 

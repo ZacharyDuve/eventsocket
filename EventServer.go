@@ -2,6 +2,8 @@ package eventsocket
 
 import (
 	"io"
+	"io/ioutil"
+	"log"
 	"net/http"
 	"sync"
 
@@ -9,7 +11,7 @@ import (
 )
 
 type EventServer interface {
-	Send(Event)
+	Send(io.Reader)
 	http.Handler
 	io.Closer
 }
@@ -50,18 +52,22 @@ func (this *eventServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	this.clientsMutex.Unlock()
 }
 
-func (this *eventServer) Send(e Event) {
-	if e != nil {
+func (this *eventServer) Send(r io.Reader) {
+	if r != nil {
 		var deadClients []*websocket.Conn
 		this.clientsMutex.Lock()
 		for _, curClient := range this.clients {
-			jEvent := mapEventToJSONEvent(e)
-			err := curClient.WriteJSON(jEvent)
-			if websocket.IsUnexpectedCloseError(err) {
-				if deadClients == nil {
-					deadClients = make([]*websocket.Conn, 0)
+			data, err := ioutil.ReadAll(r)
+			if err == nil {
+				curClient.WriteMessage(websocket.BinaryMessage, data)
+			} else {
+				log.Println(err)
+				if websocket.IsUnexpectedCloseError(err) {
+					if deadClients == nil {
+						deadClients = make([]*websocket.Conn, 0)
+					}
+					deadClients = append(deadClients, curClient)
 				}
-				deadClients = append(deadClients, curClient)
 			}
 		}
 		if len(deadClients) > 0 {
@@ -88,14 +94,4 @@ func (this *eventServer) removeDeadClients(dClients []*websocket.Conn) {
 	}
 
 	this.clientsMutex.Unlock()
-}
-
-func mapEventToJSONEvent(e Event) *jsonEvent {
-	jEvent := &jsonEvent{}
-	jEvent.EventName = e.Name()
-	jEvent.OriginTime = e.OriginTime()
-	jEvent.OriginUUID = e.OriginID().String()
-	jEvent.Data = e.Data()
-
-	return jEvent
 }
